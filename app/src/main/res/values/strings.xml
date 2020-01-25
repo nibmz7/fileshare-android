@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">File Share</string>
+
+    <string name="channel_name">Services</string>
+    <string name="channel_description">running services</string>
+
+    <string name="notification_title">Web server</string>
+    <string name="notification_message">code is xxxx</string>
+    <string name="ticker_text">Web server started</string>
+
+</resources>
