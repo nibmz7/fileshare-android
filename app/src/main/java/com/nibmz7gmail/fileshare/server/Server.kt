@@ -1,6 +1,8 @@
 package com.nibmz7gmail.fileshare.server
 
 import android.content.Context
+import android.net.wifi.WifiManager
+import android.widget.Toast
 import com.nibmz7gmail.fileshare.model.Event
 import fi.iki.elonen.NanoHTTPD
 import org.apache.commons.fileupload.FileItemIterator
@@ -11,6 +13,10 @@ import org.apache.commons.fileupload.util.Streams
 import timber.log.Timber
 import java.io.InputStream
 import java.net.BindException
+import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.UnknownHostException
+
 
 class Server(private val context: Context) : NanoHTTPD(53725)  {
 
@@ -23,19 +29,40 @@ class Server(private val context: Context) : NanoHTTPD(53725)  {
         try {
             start(SOCKET_READ_TIMEOUT, false)
         } catch (e: BindException) {
-            Timber.e("Port taken")
+            Timber.e("Port $listeningPort has already been taken")
         }
     }
 
     override fun start(timeout: Int, daemon: Boolean) {
         super.start(timeout, daemon)
         if(wasStarted()) {
-            Timber.i("Port: $listeningPort")
+            Timber.i("Listening on port $listeningPort")
             ServerLiveData.setStatus(Event.Success(START_SERVER))
+            val wifiManger =
+                context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
+            val ipAddress: Inet4Address = intToInet4AddressHTH(wifiManger.connectionInfo.ipAddress)!!
+            Toast.makeText(context, "${ipAddress.hostAddress} ${wifiManger.isWifiEnabled}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun intToInet4AddressHTH(hostAddress: Int): Inet4Address? {
+        val addressBytes = byteArrayOf(
+            (0xff and hostAddress).toByte(),
+            (0xff and (hostAddress shr 8)).toByte(),
+            (0xff and (hostAddress shr 16)).toByte(),
+            (0xff and (hostAddress shr 24)).toByte()
+        )
+        return try {
+            InetAddress.getByAddress(addressBytes) as Inet4Address
+        } catch (e: UnknownHostException) {
+            throw AssertionError()
         }
     }
 
     override fun serve(session: IHTTPSession): Response {
+
+        return newFixedLengthResponse("{\"address\":${session.remoteIpAddress}}")
 
         val uri = session.uri.removePrefix("/").ifEmpty { "index.html" }
 

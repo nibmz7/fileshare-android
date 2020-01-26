@@ -1,11 +1,13 @@
 <resources>
     <string name="app_name">File Share</string>
 
-    <string name="channel_name">Services</string>
-    <string name="channel_description">running services</string>
+    <string name="channel_name">Web server</string>
+    <string name="channel_description">To show that a local web server is running</string>
 
-    <string name="notification_title">Web server</string>
-    <string name="notification_message">code is xxxx</string>
+    <string name="title_loading">Web server is booting up</string>
+    <string name="message_loading">Please wait…</string>
+    <string name="title_ready">Web server is up and running</string>
+    <string name="message_ready">Code is %1$s</string>
     <string name="ticker_text">Web server started</string>
 
 </resources>

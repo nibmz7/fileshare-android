@@ -1,12 +1,57 @@
 <!DOCTYPE html>
 <html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>File server</title>
+    <link rel="shortcut icon" href="#" />
+</head>
+
 <body>
 
-<form action="upload" method="post" enctype="multipart/form-data">
+<div>
+    <button id="start">Start</button>
+    <br>
+    <br>
+    <br>
+    <button id="stop">Stop</button>
+</div>
+
+<style>
+        body {
+            overflow: hidden;
+            margin: 0;
+        }
+        div {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            justify-content: center;
+        }
+    </style>
+
+<script>
+        document.getElementById('start').onclick = e => {
+            Android.startServer();
+        }
+        document.getElementById('stop').onclick = e => {
+            Android.stopServer();
+        }
+         fetch("http://localhost:53725")
+        .then(response => response.json())
+        .then(json => alert(json))
+    </script>
+
+
+<!-- <form action="upload" method="post" enctype="multipart/form-data">
     Select image to upload:
     <input type="file" name="fileToUpload" id="fileToUpload" multiple>
     <input type="submit" value="Upload Image" name="submit">
-</form>
+</form> -->
 
 </body>
 </html>
