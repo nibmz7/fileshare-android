@@ -1,10 +1,12 @@
-package com.nibmz7gmail.fileshare
+package com.nibmz7gmail.fileshare.server
 
 import android.app.*
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.nibmz7gmail.fileshare.MainActivity
+import com.nibmz7gmail.fileshare.R
 
 
 class WebService : Service() {
@@ -26,7 +28,7 @@ class WebService : Service() {
         }
 
         val pendingIntent: PendingIntent =
-            Intent(this, ExampleActivity::class.java).let { notificationIntent ->
+            Intent(this, MainActivity::class.java).let { notificationIntent ->
                 PendingIntent.getActivity(this, 0, notificationIntent, 0)
             }
 
