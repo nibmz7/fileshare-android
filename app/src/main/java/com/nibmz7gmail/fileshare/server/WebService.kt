@@ -5,15 +5,42 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.Observer
 import com.nibmz7gmail.fileshare.MainActivity
 import com.nibmz7gmail.fileshare.R
+import com.nibmz7gmail.fileshare.model.Event
+import timber.log.Timber
 
 
-class WebService : Service() {
+class WebService : LifecycleService() {
 
-    val CHANNEL_ID = "WebServiceChannel"
+    private val CHANNEL_ID = "WebServiceChannel"
+    private val webServer = Server(this)
+
+    override fun onCreate() {
+        super.onCreate()
+        ServerLiveData.observe(this, Observer {
+            when(it) {
+                is Event.Success -> {
+
+                }
+                is Event.Error -> {
+
+                }
+                is Event.Loading -> {
+
+                }
+                is Event.Emit -> {
+                    Timber.d("closing")
+                    stopServer()
+                }
+            }
+        })
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // Create the NotificationChannel
             val name = getString(R.string.channel_name)
@@ -42,14 +69,20 @@ class WebService : Service() {
 
         startForeground(1, notification)
 
+        webServer.start()
+
         return START_NOT_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
+    private fun stopServer() {
+        webServer.stop()
+        stopForeground(true)
+        stopSelf()
+    }
+
+    override fun onBind(intent: Intent): IBinder? {
+        super.onBind(intent)
         return null
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-    }
 }

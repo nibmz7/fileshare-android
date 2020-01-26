@@ -32,6 +32,10 @@ dependencies {
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
     implementation 'commons-fileupload:commons-fileupload:1.4'
     implementation 'com.jakewharton.timber:timber:4.7.1'
+
+    def lifecycle_version = "2.2.0"
+    implementation "androidx.lifecycle:lifecycle-service:$lifecycle_version"
+
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'androidx.test.ext:junit:1.1.0'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.1.1'

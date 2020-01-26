@@ -1,6 +1,7 @@
 package com.nibmz7gmail.fileshare.server
 
 import android.content.Context
+import com.nibmz7gmail.fileshare.model.Event
 import fi.iki.elonen.NanoHTTPD
 import org.apache.commons.fileupload.FileItemIterator
 import org.apache.commons.fileupload.FileItemStream
@@ -12,6 +13,11 @@ import java.io.InputStream
 import java.net.BindException
 
 class Server(private val context: Context) : NanoHTTPD(53725)  {
+
+    companion object {
+        const val START_SERVER: Int = 1
+        const val STOP_SERVER: Int = 2
+    }
 
     override fun start() {
         try {
@@ -25,10 +31,9 @@ class Server(private val context: Context) : NanoHTTPD(53725)  {
         super.start(timeout, daemon)
         if(wasStarted()) {
             Timber.i("Port: $listeningPort")
-            ServerLiveData.setStatus(Result.success(STARTED))
+            ServerLiveData.setStatus(Event.Success(START_SERVER))
         }
     }
-
 
     override fun serve(session: IHTTPSession): Response {
 
@@ -107,11 +112,6 @@ class Server(private val context: Context) : NanoHTTPD(53725)  {
             return session.inputStream
         }
 
-    }
-
-    companion object {
-        const val STARTED: Int = 1
-        const val STOPPED: Int = 2
     }
 
 }
