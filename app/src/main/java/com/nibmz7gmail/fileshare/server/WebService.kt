@@ -5,16 +5,16 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
-import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.Observer
 import com.nibmz7gmail.fileshare.MainActivity
 import com.nibmz7gmail.fileshare.R
-import com.nibmz7gmail.fileshare.model.Event
+import com.nibmz7gmail.fileshare.model.ServerEvent
+import com.nibmz7gmail.fileshare.server.Server.Companion.START_SERVER
+import com.nibmz7gmail.fileshare.server.Server.Companion.STOP_SERVER
 import timber.log.Timber
 
 class WebService : LifecycleService() {
@@ -23,38 +23,26 @@ class WebService : LifecycleService() {
     private val notificationManager by lazy {
         getSystemService(NOTIFICATION_SERVICE) as NotificationManager
     }
-    private var nsdHelper: NsdHelper? = null
-    private val webServer = Server(this)
+    private val nsdHelper by lazy { NsdHelper.getInstance(this) }
+    private val webServer by lazy { Server.getInstance(this) }
+    private val notificationBuilder by lazy {
+        val pendingIntent: PendingIntent =
+            Intent(this, MainActivity::class.java).let { notificationIntent ->
+                PendingIntent.getActivity(this, 0, notificationIntent, 0)
+            }
+
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.server_notification)
+            .setContentIntent(pendingIntent)
+            .setTicker(getText(R.string.ticker_text))
+            .setColor(getColor(R.color.colorPrimary))
+            .setColorized(true)
+    }
 
     override fun onCreate() {
         super.onCreate()
-        ServerLiveData.observe(this, Observer {
-            when (it) {
-                is Event.Success -> {
-                    notificationManager.notify(1,
-                        createNotification(R.string.title_ready, R.string.message_ready))
-                    nsdHelper = NsdHelper(this).apply {
-                        initializeNsd()
-                        registerService()
-                        discoverServices()
-                    }
-                }
-                is Event.Error -> {
+        Timber.e("WEB SERVICE CREATED")
 
-                }
-                is Event.Loading -> {
-
-                }
-                is Event.Emit -> {
-                    Timber.d("closing")
-                    stopServer()
-                }
-            }
-        })
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        super.onStartCommand(intent, flags, startId)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // Create the NotificationChannel
             val name = getString(R.string.channel_name)
@@ -67,36 +55,62 @@ class WebService : LifecycleService() {
             notificationManager.createNotificationChannel(mChannel)
         }
 
-        startForeground(1,
-            createNotification(R.string.title_loading, R.string.message_loading))
+        notificationBuilder.apply {
+            setContentTitle(getText(R.string.title_loading))
+            setContentText(getText(R.string.message_loading))
+        }
+        startForeground(
+            1,
+            notificationBuilder.build()
+        )
 
-        webServer.start()
+        Server.EventEmitter.observe(this, Observer {
+            when (it) {
+                is ServerEvent.Success -> {
+                    if (it.code == START_SERVER) {
+                        notificationBuilder.apply {
+                            setContentTitle(getText(R.string.title_ready))
+                            setContentText(getString(R.string.message_ready, "xxxx"))
+                        }
+                        notificationManager.notify(
+                            1,
+                            notificationBuilder.build()
+                        )
+                        nsdHelper.startRegister(webServer.listeningPort, it.message)
+                    }
+
+                }
+                is ServerEvent.Error -> {
+
+                }
+                is ServerEvent.Loading -> {
+
+                }
+                is ServerEvent.Emit -> {
+                    Timber.d("$it")
+                    if (it.code == STOP_SERVER) {
+                        stopForeground(true)
+                        stopSelf()
+                    }
+                }
+            }
+        })
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+
+        val hostname = intent?.getStringExtra("hostname") ?: "Anon"
+        webServer.start(hostname)
 
         return START_NOT_STICKY
     }
 
-    private fun createNotification(title: Int, message: Int, code: String? = "xxxx"): Notification {
-        val pendingIntent: PendingIntent =
-            Intent(this, MainActivity::class.java).let { notificationIntent ->
-                PendingIntent.getActivity(this, 0, notificationIntent, 0)
-            }
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getText(title))
-            .setContentText(getString(message, code))
-            .setSmallIcon(R.drawable.server_notification)
-            .setContentIntent(pendingIntent)
-            .setTicker(getText(R.string.ticker_text))
-            .setColor(getColor(R.color.colorPrimary))
-            .setColorized(true)
-            .build()
-    }
-
-    private fun stopServer() {
+    override fun onDestroy() {
+        Timber.e("Web service is stopping")
         webServer.stop()
-        nsdHelper?.tearDown()
-        stopForeground(true)
-        stopSelf()
+        nsdHelper.stopRegister()
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent): IBinder? {

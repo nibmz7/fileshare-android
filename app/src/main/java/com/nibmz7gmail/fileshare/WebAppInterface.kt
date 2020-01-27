@@ -3,28 +3,28 @@ package com.nibmz7gmail.fileshare
 import android.content.Context
 import android.content.Intent
 import android.webkit.JavascriptInterface
-import android.widget.Toast
-import com.nibmz7gmail.fileshare.model.Event
+import androidx.core.content.ContextCompat
+import com.nibmz7gmail.fileshare.model.ServerEvent
 import com.nibmz7gmail.fileshare.server.Server
 import com.nibmz7gmail.fileshare.server.Server.Companion.START_SERVER
 import com.nibmz7gmail.fileshare.server.Server.Companion.STOP_SERVER
-import com.nibmz7gmail.fileshare.server.ServerLiveData
 import com.nibmz7gmail.fileshare.server.WebService
 
-class WebAppInterface(private val mContext: Context) {
+class WebAppInterface(private val context: Context) {
 
     @JavascriptInterface
-    fun startServer() {
+    fun startServer(hostName: String) {
         AppExecutors.mainThread().execute {
-            ServerLiveData.setStatus(Event.Emit(START_SERVER))
-            mContext.startForegroundService(Intent(mContext, WebService::class.java))
+            val webServiceIntent = Intent(context, WebService::class.java)
+            webServiceIntent.putExtra("hostname", hostName)
+            ContextCompat.startForegroundService(context, webServiceIntent)
         }
     }
 
     @JavascriptInterface
     fun stopServer() {
         AppExecutors.mainThread().execute {
-            ServerLiveData.setStatus(Event.Emit(STOP_SERVER))
+            Server.EventEmitter.setStatus(ServerEvent.Emit(STOP_SERVER))
         }
     }
 }

@@ -1,72 +1,54 @@
 package com.nibmz7gmail.fileshare.server
 
+import android.app.Application
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdManager.*
 import android.net.nsd.NsdServiceInfo
+import androidx.lifecycle.LiveData
+import com.nibmz7gmail.fileshare.AppExecutors
+import com.nibmz7gmail.fileshare.model.Host
+import com.nibmz7gmail.fileshare.model.HostEvent
 import timber.log.Timber
-import java.net.InetAddress
+import java.lang.Exception
 import java.net.ServerSocket
-import java.net.Socket
 
 
-class NsdHelper(context: Context) {
-    var mContext: Context
-    var mNsdManager: NsdManager
-    var mResolveListener: ResolveListener? = null
-    var mDiscoveryListener: DiscoveryListener? = null
-    var mRegistrationListener: RegistrationListener? = null
-    var mServiceName = "NsdChat"
-    var chosenServiceInfo: NsdServiceInfo? = null
-    var mSocket: ServerSocket? = null
+class NsdHelper(context: Application) {
+    private val nsdManager: NsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private var discoveryListener: DiscoveryListener? = null
+    private var registrationListener: RegistrationListener? = null
+    private var myServiceName: String = ""
 
-    fun initializeNsd() {
-        initializeResolveListener()
-    }
+    companion object {
+        const val SERVICE_TYPE = "_http._tcp."
+        const val SERVICE_NAME = "NiMzShare"
 
-    fun initializeDiscoveryListener() {
-        mDiscoveryListener = object : DiscoveryListener {
-            override fun onDiscoveryStarted(regType: String) {
-                Timber.d("Service discovery started")
-            }
+        private val LOCK = Any()
+        private var instance: NsdHelper? = null
 
-            override fun onServiceFound(service: NsdServiceInfo) {
-                Timber.d("Service discovery success$service")
-                when {
-                    service.serviceType != SERVICE_TYPE -> {
-                        Timber.d(
-                            "Unknown Service Type: %s", service.serviceType
-                        )
-                    }
-                    service.serviceName == mServiceName -> {
-                        Timber.d("Same machine: $mServiceName")
-                        mNsdManager.resolveService(service, initializeResolveListener())
-
-                    }
-                    service.serviceName.contains(mServiceName) -> {
-                    }
+        fun getInstance(context: Context): NsdHelper {
+            synchronized(LOCK) {
+                if (instance == null) {
+                    instance = NsdHelper(context.applicationContext as Application)
                 }
-            }
-
-            override fun onServiceLost(service: NsdServiceInfo) {
-                Timber.e("service lost$service")
-            }
-
-            override fun onDiscoveryStopped(serviceType: String) {
-                Timber.i("Discovery stopped: $serviceType")
-            }
-
-            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                Timber.e("Discovery failed: Error code:$errorCode")
-            }
-
-            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
-                Timber.e("Discovery failed: Error code:$errorCode")
+                return instance as NsdHelper
             }
         }
     }
 
-    fun initializeResolveListener(): ResolveListener {
+    object EventEmitter : LiveData<HostEvent>() {
+
+        fun setStatus(event: HostEvent) {
+            value = event
+        }
+
+        fun postStatus(event: HostEvent) {
+            postValue(event)
+        }
+    }
+
+    fun createResolveListener(): ResolveListener {
         return object : ResolveListener {
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 Timber.e("Resolve failed code: $errorCode")
@@ -74,21 +56,70 @@ class NsdHelper(context: Context) {
 
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
                 Timber.e("Resolve Succeeded. $serviceInfo")
-                if (serviceInfo.serviceName == mServiceName) {
-                    Timber.d("Same IP.")
-                }
                 val port: Int = serviceInfo.port
                 val address: String = serviceInfo.host.hostAddress
-                Timber.i("NameL${serviceInfo.serviceName} port:$port address:$address")
+                val hostname: String =
+                    serviceInfo.attributes["hostname"]?.toString(Charsets.UTF_8) ?: "Anon"
+                if (serviceInfo.serviceName == myServiceName) {
+                    Timber.d("Same IP.")
+                }
+                val host = Host(serviceInfo.serviceName, hostname, address)
+                EventEmitter.postStatus(HostEvent.Added(host))
+                Timber.d("Service Name:${serviceInfo.serviceName} port:$port address:$address name:$hostname")
             }
         }
     }
 
+    fun startRegister(localPort: Int, hostname: String) {
+        stopRegister()
+        initializeRegistrationListener()
+        val serviceInfo = NsdServiceInfo().apply {
+            serviceName = SERVICE_NAME
+            serviceType = SERVICE_TYPE
+            port = localPort
+            setAttribute("hostname", hostname)
+        }
+        try {
+            nsdManager.registerService(serviceInfo, PROTOCOL_DNS_SD, registrationListener)
+        } catch (e: Exception) {
+            Timber.e(e)
+        }
+
+    }
+
+    fun stopRegister() {
+        registrationListener?.let {
+            try {
+                nsdManager.unregisterService(registrationListener)
+            } catch (e: Exception) {
+                Timber.e(e)
+            }
+            registrationListener = null
+        }
+    }
+
+    fun startDiscovery() {
+        stopDiscovery()
+        initializeDiscoveryListener()
+        nsdManager.discoverServices(SERVICE_TYPE, PROTOCOL_DNS_SD, discoveryListener)
+    }
+
+    fun stopDiscovery() {
+        discoveryListener?.let {
+            try {
+                nsdManager.stopServiceDiscovery(discoveryListener)
+            } catch (e: Exception) {
+                Timber.e(e)
+            }
+            discoveryListener = null
+        }
+    }
+
     fun initializeRegistrationListener() {
-        mRegistrationListener = object : RegistrationListener {
+        registrationListener = object : RegistrationListener {
             override fun onServiceRegistered(NsdServiceInfo: NsdServiceInfo) {
-                mServiceName = NsdServiceInfo.serviceName
-                Timber.d("Service registered: $mServiceName")
+                myServiceName = NsdServiceInfo.serviceName
+                Timber.d("Service registered: $myServiceName")
             }
 
             override fun onRegistrationFailed(arg0: NsdServiceInfo, arg1: Int) {
@@ -99,50 +130,47 @@ class NsdHelper(context: Context) {
                 Timber.d("Service unregistered: %s", arg0.serviceName)
             }
 
-            override fun onUnregistrationFailed(
-                serviceInfo: NsdServiceInfo,
-                errorCode: Int
-            ) {
+            override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 Timber.d("Service unregistration failed: $errorCode")
             }
         }
     }
 
-    fun registerService() {
-        initializeRegistrationListener()
-        mSocket = ServerSocket(0).also { socket ->
-            val serviceInfo = NsdServiceInfo().apply {
-                serviceName = mServiceName
-                serviceType = SERVICE_TYPE
-                port = socket.localPort
+    fun initializeDiscoveryListener() {
+        discoveryListener = object : DiscoveryListener {
+            override fun onDiscoveryStarted(regType: String) {
+                Timber.d("Service discovery started")
             }
-            mNsdManager.registerService(
-                serviceInfo, PROTOCOL_DNS_SD, mRegistrationListener
-            )
+
+            override fun onServiceFound(service: NsdServiceInfo) {
+                if (service.serviceType != SERVICE_TYPE) return
+                if (service.serviceName.contains(SERVICE_NAME)) {
+                    Timber.d("File sharing service found: ${service.serviceName}")
+                    nsdManager.resolveService(service, createResolveListener())
+                }
+            }
+
+            override fun onServiceLost(service: NsdServiceInfo) {
+                Timber.e("service lost$service")
+                if (service.serviceName.contains(SERVICE_NAME)) {
+                    EventEmitter.postStatus(HostEvent.Removed(service.serviceName))
+                }
+            }
+
+            override fun onDiscoveryStopped(serviceType: String) {
+                Timber.i("Discovery stopped: $serviceType")
+            }
+
+            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                Timber.e("Discovery failed: Error code:$errorCode")
+                nsdManager.stopServiceDiscovery(this)
+            }
+
+            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+                Timber.e("Discovery failed: Error code:$errorCode")
+                nsdManager.stopServiceDiscovery(this)
+            }
         }
     }
 
-    fun discoverServices() {
-        initializeDiscoveryListener()
-        mNsdManager.discoverServices(
-            SERVICE_TYPE, PROTOCOL_DNS_SD, mDiscoveryListener
-        )
-    }
-
-    fun tearDown() {
-        mNsdManager.apply {
-            unregisterService(mRegistrationListener)
-            stopServiceDiscovery(mDiscoveryListener)
-            mSocket?.close()
-        }
-    }
-
-    companion object {
-        const val SERVICE_TYPE = "_http._tcp."
-    }
-
-    init {
-        mContext = context
-        mNsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
-    }
 }
