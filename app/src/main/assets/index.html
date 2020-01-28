@@ -12,11 +12,10 @@
 <body>
 
 <div>
-    <button id="start">Start</button>
+    <h1>Hello world!</h1>
     <br>
     <br>
     <br>
-    <button id="stop">Stop</button>
 </div>
 
 <style>
@@ -35,23 +34,27 @@
     </style>
 
 <script>
-        document.getElementById('start').onclick = e => {
-            Android.startServer();
-        }
-        document.getElementById('stop').onclick = e => {
-            Android.stopServer();
-        }
-         fetch("http://localhost:53725")
-        .then(response => response.json())
-        .then(json => alert(json))
-    </script>
+    const evtSource = new EventSource('/events');
+        console.log(evtSource.readyState);
+        console.log("starting");
 
+        evtSource.addEventListener('update', evt => {
+            console.log(evt.data);
+        });
 
-<!-- <form action="upload" method="post" enctype="multipart/form-data">
-    Select image to upload:
-    <input type="file" name="fileToUpload" id="fileToUpload" multiple>
-    <input type="submit" value="Upload Image" name="submit">
-</form> -->
+        evtSource.onerror= () => {
+            evtSource.close();
+            console.log("EVENT SOURCE ERROR CLOSED");
+        }
+
+        evtSource.onopen = () => {
+            console.log("EVENT SOURCE OPEN");
+        }
+
+        evtSource.onmessage = e => {
+            console.log(e);
+        }
+</script>
 
 </body>
 </html>

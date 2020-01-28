@@ -1,7 +1,9 @@
 package com.nibmz7gmail.fileshare
 
+import android.content.Context
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Looper
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.lifecycle.Observer
@@ -11,15 +13,15 @@ import timber.log.Timber
 
 class MainActivity : AppCompatActivity() {
 
-    lateinit var nsdHelper: NsdHelper
+    val nsdHelper by lazy { NsdHelper.getInstance(this) }
+    val sharedPref by lazy { this.getPreferences(Context.MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        nsdHelper = NsdHelper.getInstance(this)
         val webView: WebView = findViewById(R.id.webview)
         webView.settings.javaScriptEnabled = true
-        val urlPage = "http://192.168.0.139:5500/index.html"
+        val urlPage = "http://192.168.43.158:5500/index.html"
         webView.addJavascriptInterface(WebAppInterface(this), "Android")
 
         webView.webViewClient = object : WebViewClient() {

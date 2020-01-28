@@ -2,17 +2,23 @@ package com.nibmz7gmail.fileshare.server
 
 import android.app.Application
 import android.content.Context
+import android.os.Looper
 import androidx.lifecycle.LiveData
 import com.nibmz7gmail.fileshare.model.ServerEvent
-import fi.iki.elonen.NanoHTTPD
 import org.apache.commons.fileupload.FileItemIterator
 import org.apache.commons.fileupload.FileItemStream
 import org.apache.commons.fileupload.UploadContext
 import org.apache.commons.fileupload.servlet.ServletFileUpload
 import org.apache.commons.fileupload.util.Streams
+import org.nanohttpd.protocols.http.IHTTPSession
+import org.nanohttpd.protocols.http.NanoHTTPD
+import org.nanohttpd.protocols.http.response.Response
+import org.nanohttpd.protocols.http.response.Response.newChunkedResponse
+import org.nanohttpd.protocols.http.response.Response.newFixedLengthResponse
+import org.nanohttpd.protocols.http.response.Status
+import org.nanohttpd.util.IHandler
 import timber.log.Timber
 import java.io.InputStream
-import java.net.BindException
 
 class Server(private val context: Application) : NanoHTTPD(45635)  {
 
@@ -34,6 +40,23 @@ class Server(private val context: Application) : NanoHTTPD(45635)  {
             }
         }
     }
+
+    init {
+        addHTTPInterceptor(SSEInterceptor)
+    }
+
+    object SSEInterceptor : IHandler<IHTTPSession, Response> {
+
+        override fun handle(input: IHTTPSession): Response? {
+            val uri = input.uri.removePrefix("/").ifEmpty { "index.html" }
+            if(uri == "events") {
+                val sseSocket = SseSocket(input)
+                return sseSocket.handshakeResponse
+            } else return null
+
+        }
+    }
+
 
     object EventEmitter : LiveData<ServerEvent>() {
 
@@ -108,7 +131,7 @@ class Server(private val context: Application) : NanoHTTPD(45635)  {
                 "js" -> "application/javascript"
                 else -> "text"
             }
-            newChunkedResponse(Response.Status.OK, mime, context.assets.open("$uri"))
+            newChunkedResponse(Status.OK, mime, context.assets.open(uri))
         } catch (e: Exception) {
             val message = "Failed to load asset $uri because $e"
             newFixedLengthResponse(message)
