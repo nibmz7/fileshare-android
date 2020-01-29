@@ -1,5 +1,7 @@
 package com.nibmz7gmail.fileshare.server
 
+import android.os.Looper
+import androidx.annotation.WorkerThread
 import org.nanohttpd.protocols.http.content.ContentType
 import org.nanohttpd.protocols.http.response.ChunkedOutputStream
 import org.nanohttpd.protocols.http.response.Response
@@ -22,14 +24,12 @@ class SseSocket(source: Any) {
     fun createSseResponse(): Response {
         val sseResponse = SseResponse()
         support.addPropertyChangeListener(sseResponse)
-        Timber.e(support.propertyChangeListeners.toString())
         return sseResponse
     }
 
+    @WorkerThread
     fun fireEvent(message: String) {
-        Timber.e("FIRING NEW PROPERTY")
-        Timber.e(support.propertyChangeListeners.toString())
-        support.firePropertyChange("update", "old$message", message)
+        support.firePropertyChange("update", null, message)
     }
 
     private inner class SseResponse: Response(Status.OK, null, null, 0), PropertyChangeListener {
@@ -38,7 +38,6 @@ class SseSocket(source: Any) {
         var message: String? = "Lol"
 
         override fun propertyChange(evt: PropertyChangeEvent) {
-            Timber.e("PROPERTY CHANGED")
             synchronized(pauseLock) {
                 this.message = evt.newValue.toString()
                 pauseLock.notify()
@@ -67,22 +66,16 @@ class SseSocket(source: Any) {
             pw.append("Keep-Alive: timeout=60, max=1000\r\n")
             pw.append("Transfer-Encoding: chunked0\r\n\r\n")
             pw.flush()
-            Timber.e("HEADER SENT")
 
             while (true) {
                 try {
-                    Timber.e("ENTERING")
                     synchronized(pauseLock) {
-                        Timber.e("STARTING")
                         pauseLock.wait()
-                        Timber.e("ENDED")
-                        val data = "retry: 500\n" +
-                                "event: update\n" +
-                                "data: Hello\n\n"
+                        val data = "data: $message\n\n"
                         val chunkedOutputStream = ChunkedOutputStream(out)
                         chunkedOutputStream.write(data.toByteArray())
                         chunkedOutputStream.finish()
-                        Timber.e("Sent")
+                        Timber.i("Message sent")
                     }
                 } catch (e: Exception) {
                     Timber.e("SENDING FAILED CLIENT CLOSED CONNECTION")

@@ -2,25 +2,31 @@ package com.nibmz7gmail.fileshare.server
 
 import android.app.Application
 import android.content.Context
-import android.os.Looper
+import androidx.annotation.MainThread
 import androidx.lifecycle.LiveData
+import com.nibmz7gmail.fileshare.AppExecutors
 import com.nibmz7gmail.fileshare.model.ServerEvent
 import org.apache.commons.fileupload.FileItemIterator
 import org.apache.commons.fileupload.FileItemStream
 import org.apache.commons.fileupload.UploadContext
 import org.apache.commons.fileupload.servlet.ServletFileUpload
 import org.apache.commons.fileupload.util.Streams
+import org.json.JSONObject
 import org.nanohttpd.protocols.http.IHTTPSession
 import org.nanohttpd.protocols.http.NanoHTTPD
+import org.nanohttpd.protocols.http.content.ContentType
+import org.nanohttpd.protocols.http.request.Method
+import org.nanohttpd.protocols.http.response.ChunkedOutputStream
 import org.nanohttpd.protocols.http.response.Response
 import org.nanohttpd.protocols.http.response.Response.newChunkedResponse
 import org.nanohttpd.protocols.http.response.Response.newFixedLengthResponse
 import org.nanohttpd.protocols.http.response.Status
-import org.nanohttpd.util.IHandler
 import timber.log.Timber
-import java.io.InputStream
+import java.io.*
+import java.text.SimpleDateFormat
+import java.util.*
 
-class Server(private val context: Application) : NanoHTTPD(45635)  {
+class Server(private val context: Application) : NanoHTTPD(45635) {
 
     private var myHostName: String = "Anon"
     private val sseSocket = SseSocket(this)
@@ -53,7 +59,7 @@ class Server(private val context: Application) : NanoHTTPD(45635)  {
     fun start(hostname: String) {
         myHostName = hostname
         try {
-            if(isAlive) {
+            if (isAlive) {
                 Timber.e("Server is already listening on $listeningPort")
                 EventEmitter.setStatus(ServerEvent.Success(START_SERVER, myHostName))
                 return
@@ -70,7 +76,7 @@ class Server(private val context: Application) : NanoHTTPD(45635)  {
 
     override fun start(timeout: Int, daemon: Boolean) {
         super.start(timeout, daemon)
-        if(wasStarted()) {
+        if (wasStarted()) {
             Timber.i("Listening on port $listeningPort")
             EventEmitter.setStatus(ServerEvent.Success(START_SERVER, myHostName))
         }
@@ -78,13 +84,40 @@ class Server(private val context: Application) : NanoHTTPD(45635)  {
 
     override fun stop() {
         super.stop()
-        if(!isAlive) Timber.e("Server has been stopped")
+        if (!isAlive) Timber.e("Server has been stopped")
     }
 
+    @MainThread
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri.removePrefix("/").ifEmpty { "index.html" }
 
-        if(uri == "events") {
+        if (uri == "message") {
+
+            if (session.method == Method.OPTIONS) {
+                val response = newFixedLengthResponse("")
+                response.addHeader("Connection", "keep-alive")
+                response.addHeader("Access-Control-Allow-Origin", "*")
+                response.addHeader("Access-Control-Allow-Methods", "PUT")
+                response.addHeader("Access-Control-Max-Age", "86400")
+                response.addHeader("Access-Control-Allow-Headers", "*")
+                return response
+            }
+            val map = HashMap<String, String>()
+            session.parseBody(map)
+            val jsonData = map["postData"] ?: return newFixedLengthResponse(
+                Status.BAD_REQUEST,
+                MIME_PLAINTEXT,
+                "BAD BAD"
+            )
+            AppExecutors.networkIO().execute {
+                sseSocket.fireEvent(jsonData)
+            }
+            val response = newFixedLengthResponse("Success")
+            response.addHeader("Access-Control-Allow-Origin", "*")
+            return response
+        }
+
+        if (uri == "events") {
             return sseSocket.createSseResponse()
         }
 
@@ -100,9 +133,9 @@ class Server(private val context: Application) : NanoHTTPD(45635)  {
                     println("Form field $name with value ${Streams.asString(inputStream)} detected.")
                 } else {
                     println("File field $name with file name ${item.name} detected.")
-                    inputStream.use {input ->
+                    inputStream.use { input ->
                         val outputStream = context.openFileOutput(item.name, Context.MODE_PRIVATE)
-                        outputStream.use {output ->
+                        outputStream.use { output ->
                             val buffer = ByteArray(4 * 1024) // buffer size
                             while (true) {
                                 val byteCount = input.read(buffer)

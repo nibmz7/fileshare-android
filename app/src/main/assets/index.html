@@ -14,17 +14,17 @@
 <div>
     <input type="text" id="name">
     <br>
-    <br>
-    <br>
     <button id="start">Start</button>
     <br>
     <br>
     <br>
-    <button id="stop">Stop</button>
-    <br>
-    <br>
+    <input type="text" id="message">
     <br>
     <button id="send">Send</button>
+    <br>
+    <div id="messages">
+
+    </div>
 </div>
 
 <style>
@@ -44,45 +44,101 @@
             width: 90px;
             height: 30px;
         }
+        #messages {
+            margin-top: 0;
+            padding: 0;
+            overflow-y: scroll;
+            max-height: 200px;
+        }
+        #messages p{
+            margin: 10px;
+        }
     </style>
 
 <script>
-        const evtSource = new EventSource('/events');
-        console.log("listening");
 
-        evtSource.addEventListener('update', evt => {
-            console.log(evt.data);
-        });
+        let isListening = false;
+        if(!isListening) listenForEvents();
 
-        evtSource.onopen = () => {
-            console.log("sse open");
+        let send = document.getElementById('send')
+        let serverButton = document.getElementById('start');
+        let isStarted = true;
+
+        serverButton.onclick = e => {
+            isStarted = !isStarted
+            if(isStarted) {
+                serverButton.textContent = "Start"
+                Android.stopServer();
+            } else {
+                serverButton.textContent = "Stop"
+                let hostName = document.getElementById('name').value;
+                Android.startServer(hostName);
+            }
         }
 
-        evtSource.onerror = () => {
-            evtSource.close();
-            console.log("sse closed");
+        send.onclick = e => {
+            if(!isListening) {
+                listenForEvents();
+            }
+            else {
+                let message = document.getElementById('message').value;
+                if(message != "") {
+                    sendMessage(message);
+                }
+            }
         }
 
-        document.getElementById('start').onclick = e => {
-            let hostName = document.getElementById('name').value;
-            Android.startServer(hostName);
-        }
-        document.getElementById('stop').onclick = e => {
-            Android.stopServer();
+        async function sendMessage(message){
+            const rawResponse = await fetch('http://192.168.0.9:45635/message', {
+                method: 'POST',
+                headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+
+                },
+                body: JSON.stringify({message})
+            });
+            const content = await rawResponse.text();
+            console.log(content);
         }
 
-        document.getElementById('send').onclick = e => {
-            Android.sendMessage("Message sent");
-        }
+
 
         function addHost(serviceName, hostName) {
-            let p = document.createElement('p');
-            p.id = serviceName;
-            p.textContent = hostName;
-            document.querySelector('div').appendChild(p);
+            // let p = document.createElement('p');
+            // p.id = serviceName;
+            // p.textContent = hostName;
+            // document.querySelector('div').appendChild(p);
         }
         function removeHost(serviceName) {
             document.getElementById(serviceName).remove();
+        }
+
+        let messages = document.getElementById('messages');
+
+        function listenForEvents() {
+            const evtSource = new EventSource('http://192.168.0.9:45635/events');
+
+            evtSource.onmessage = e => {
+                let data = JSON.parse(e.data);
+                let p = document.createElement('p');
+                p.textContent = data.message;
+                messages.appendChild(p);
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            evtSource.onopen = () => {
+                isListening = true;
+                console.log("sse open");
+                send.textContent = "send";
+            }
+
+            evtSource.onerror = () => {
+                evtSource.close();
+                console.log("sse closed");
+                isListening = false;
+                send.textContent = "retry";
+            }
         }
     </script>
 

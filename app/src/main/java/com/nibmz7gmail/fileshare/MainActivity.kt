@@ -21,7 +21,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         val webView: WebView = findViewById(R.id.webview)
         webView.settings.javaScriptEnabled = true
-//        val urlPage = "http://192.168.43.158:5500/index.html"
+//        val urlPage = "http://192.168.0.139:5500/index.html"
         val urlPage = "file:///android_asset/index.html"
         webView.addJavascriptInterface(WebAppInterface(this), "Android")
 
