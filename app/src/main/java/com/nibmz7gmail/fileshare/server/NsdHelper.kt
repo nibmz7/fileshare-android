@@ -6,12 +6,10 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdManager.*
 import android.net.nsd.NsdServiceInfo
 import androidx.lifecycle.LiveData
-import com.nibmz7gmail.fileshare.AppExecutors
 import com.nibmz7gmail.fileshare.model.Host
 import com.nibmz7gmail.fileshare.model.HostEvent
 import timber.log.Timber
 import java.lang.Exception
-import java.net.ServerSocket
 
 
 class NsdHelper(context: Application) {
@@ -63,7 +61,7 @@ class NsdHelper(context: Application) {
                 if (serviceInfo.serviceName == myServiceName) {
                     Timber.d("Same IP.")
                 }
-                val host = Host(serviceInfo.serviceName, hostname, address)
+                val host = Host(serviceInfo.serviceName, hostname, address, port)
                 EventEmitter.postStatus(HostEvent.Added(host))
                 Timber.d("Service Name:${serviceInfo.serviceName} port:$port address:$address name:$hostname")
             }

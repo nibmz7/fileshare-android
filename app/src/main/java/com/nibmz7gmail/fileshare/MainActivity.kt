@@ -40,7 +40,9 @@ class MainActivity : AppCompatActivity() {
                 is HostEvent.Added -> {
                     val hostName = it.host.name
                     val serviceName = it.host.serviceName
-                    webView.loadUrl("javascript:addHost('$serviceName','$hostName')")
+                    val ipAddr = it.host.address
+                    val port = it.host.port
+                    webView.loadUrl("javascript:addHost('$serviceName','$hostName', '$ipAddr:$port')")
                 }
                 is HostEvent.Removed -> {
                     webView.loadUrl("javascript:removeHost('${it.serviceName}')")

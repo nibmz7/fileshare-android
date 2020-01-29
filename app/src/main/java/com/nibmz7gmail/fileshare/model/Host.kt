@@ -3,7 +3,8 @@ package com.nibmz7gmail.fileshare.model
 data class Host(
     val serviceName: String,
     val name: String,
-    val address: String
+    val address: String,
+    val port: Int
 )
 
 sealed class HostEvent{

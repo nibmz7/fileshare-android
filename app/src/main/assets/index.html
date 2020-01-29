@@ -12,6 +12,7 @@
 <body>
 
 <div>
+    <p id="serverinfo"></p>
     <input type="text" id="name">
     <br>
     <button id="start">Start</button>
@@ -56,6 +57,8 @@
     </style>
 
 <script>
+
+        let serverinfo = document.getElementById('serverinfo');
 
         let isListening = false;
         if(!isListening) listenForEvents();
@@ -104,14 +107,11 @@
 
 
 
-        function addHost(serviceName, hostName) {
-            // let p = document.createElement('p');
-            // p.id = serviceName;
-            // p.textContent = hostName;
-            // document.querySelector('div').appendChild(p);
+        function addHost(serviceName, hostName, ipaddr) {
+            serverinfo.textContent = `${serviceName} ${hostName} ${ipaddr}`;
         }
         function removeHost(serviceName) {
-            document.getElementById(serviceName).remove();
+            serverinfo.textContent = "";
         }
 
         let messages = document.getElementById('messages');
