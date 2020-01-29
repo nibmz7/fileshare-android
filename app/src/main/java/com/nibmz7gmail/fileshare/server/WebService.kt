@@ -13,6 +13,7 @@ import androidx.lifecycle.Observer
 import com.nibmz7gmail.fileshare.MainActivity
 import com.nibmz7gmail.fileshare.R
 import com.nibmz7gmail.fileshare.model.ServerEvent
+import com.nibmz7gmail.fileshare.server.Server.Companion.MESSAGE
 import com.nibmz7gmail.fileshare.server.Server.Companion.START_SERVER
 import com.nibmz7gmail.fileshare.server.Server.Companion.STOP_SERVER
 import timber.log.Timber
@@ -91,6 +92,9 @@ class WebService : LifecycleService() {
                     if (it.code == STOP_SERVER) {
                         stopForeground(true)
                         stopSelf()
+                    }
+                    else if(it.code == MESSAGE) {
+                        webServer.sendMessage(it.message)
                     }
                 }
             }

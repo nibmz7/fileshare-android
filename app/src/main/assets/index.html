@@ -12,10 +12,19 @@
 <body>
 
 <div>
-    <h1>Hello world!</h1>
+    <input type="text" id="name">
     <br>
     <br>
     <br>
+    <button id="start">Start</button>
+    <br>
+    <br>
+    <br>
+    <button id="stop">Stop</button>
+    <br>
+    <br>
+    <br>
+    <button id="send">Send</button>
 </div>
 
 <style>
@@ -29,32 +38,60 @@
             align-items: center;
             height: 100vh;
             width: 100vw;
-            justify-content: center;
+            padding-top: 100px;
+        }
+        button {
+            width: 90px;
+            height: 30px;
         }
     </style>
 
 <script>
-    const evtSource = new EventSource('/events');
-        console.log(evtSource.readyState);
-        console.log("starting");
+        const evtSource = new EventSource('/events');
+        console.log("listening");
 
         evtSource.addEventListener('update', evt => {
             console.log(evt.data);
         });
 
-        evtSource.onerror= () => {
-            evtSource.close();
-            console.log("EVENT SOURCE ERROR CLOSED");
-        }
-
         evtSource.onopen = () => {
-            console.log("EVENT SOURCE OPEN");
+            console.log("sse open");
         }
 
-        evtSource.onmessage = e => {
-            console.log(e);
+        evtSource.onerror = () => {
+            evtSource.close();
+            console.log("sse closed");
         }
-</script>
+
+        document.getElementById('start').onclick = e => {
+            let hostName = document.getElementById('name').value;
+            Android.startServer(hostName);
+        }
+        document.getElementById('stop').onclick = e => {
+            Android.stopServer();
+        }
+
+        document.getElementById('send').onclick = e => {
+            Android.sendMessage("Message sent");
+        }
+
+        function addHost(serviceName, hostName) {
+            let p = document.createElement('p');
+            p.id = serviceName;
+            p.textContent = hostName;
+            document.querySelector('div').appendChild(p);
+        }
+        function removeHost(serviceName) {
+            document.getElementById(serviceName).remove();
+        }
+    </script>
+
+
+<!-- <form action="upload" method="post" enctype="multipart/form-data">
+    Select image to upload:
+    <input type="file" name="fileToUpload" id="fileToUpload" multiple>
+    <input type="submit" value="Upload Image" name="submit">
+</form> -->
 
 </body>
 </html>

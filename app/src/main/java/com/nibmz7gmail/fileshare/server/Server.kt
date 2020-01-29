@@ -23,10 +23,12 @@ import java.io.InputStream
 class Server(private val context: Application) : NanoHTTPD(45635)  {
 
     private var myHostName: String = "Anon"
+    private val sseSocket = SseSocket(this)
 
     companion object {
         const val START_SERVER: Int = 1
         const val STOP_SERVER: Int = 2
+        const val MESSAGE: Int = 3
 
         private val LOCK = Any()
         private var instance: Server? = null
@@ -40,23 +42,6 @@ class Server(private val context: Application) : NanoHTTPD(45635)  {
             }
         }
     }
-
-    init {
-        addHTTPInterceptor(SSEInterceptor)
-    }
-
-    object SSEInterceptor : IHandler<IHTTPSession, Response> {
-
-        override fun handle(input: IHTTPSession): Response? {
-            val uri = input.uri.removePrefix("/").ifEmpty { "index.html" }
-            if(uri == "events") {
-                val sseSocket = SseSocket(input)
-                return sseSocket.handshakeResponse
-            } else return null
-
-        }
-    }
-
 
     object EventEmitter : LiveData<ServerEvent>() {
 
@@ -79,6 +64,10 @@ class Server(private val context: Application) : NanoHTTPD(45635)  {
         }
     }
 
+    fun sendMessage(message: String) {
+        sseSocket.fireEvent(message)
+    }
+
     override fun start(timeout: Int, daemon: Boolean) {
         super.start(timeout, daemon)
         if(wasStarted()) {
@@ -94,6 +83,10 @@ class Server(private val context: Application) : NanoHTTPD(45635)  {
 
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri.removePrefix("/").ifEmpty { "index.html" }
+
+        if(uri == "events") {
+            return sseSocket.createSseResponse()
+        }
 
         if (uri == "upload") {
             val fileUpload = ServletFileUpload()
