@@ -60,6 +60,9 @@ class NsdHelper(context: Application) {
                     serviceInfo.attributes["hostname"]?.toString(Charsets.UTF_8) ?: "Anon"
                 if (serviceInfo.serviceName == myServiceName) {
                     Timber.d("Same IP.")
+                    val host = Host(serviceInfo.serviceName, hostname, address, port, true)
+                    EventEmitter.postStatus(HostEvent.Added(host))
+                    return
                 }
                 val host = Host(serviceInfo.serviceName, hostname, address, port)
                 EventEmitter.postStatus(HostEvent.Added(host))

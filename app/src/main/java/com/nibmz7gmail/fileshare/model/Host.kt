@@ -4,7 +4,8 @@ data class Host(
     val serviceName: String,
     val name: String,
     val address: String,
-    val port: Int
+    val port: Int,
+    val isOwner: Boolean = false
 )
 
 sealed class HostEvent{

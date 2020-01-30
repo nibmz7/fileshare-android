@@ -29,8 +29,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         val webView: WebView = findViewById(R.id.webview)
         webView.settings.javaScriptEnabled = true
-        val urlPage = "http://192.168.0.139:5500/index.html"
-//        val urlPage = "file:///android_asset/index.html"
+//        val urlPage = "http://192.168.0.139:5500/index.html"
+        val urlPage = "file:///android_asset/index.html"
         webView.addJavascriptInterface(WebAppInterface(this), "Android")
 
         webView.webViewClient = object : WebViewClient() {
@@ -50,7 +50,9 @@ class MainActivity : AppCompatActivity() {
                     val serviceName = it.host.serviceName
                     val ipAddr = it.host.address
                     val port = it.host.port
-                    webView.loadUrl("javascript:addHost('$serviceName','$hostName', '$ipAddr:$port')")
+                    val data = "'$serviceName','$hostName', '$ipAddr:$port'"
+                    if(it.host.isOwner) webView.loadUrl("javascript:setServerInfo($data)")
+                    webView.loadUrl("javascript:addHost($data)")
                 }
                 is HostEvent.Removed -> {
                     webView.loadUrl("javascript:removeHost('${it.serviceName}')")
@@ -66,7 +68,7 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == PICK_FILES && resultCode == Activity.RESULT_OK) {
 
             AppExecutors.diskIO().execute {
-                storageRepository.saveFiles(returnIntent)
+                storageRepository.saveFiles(intent)
             }
         }
     }

@@ -12,18 +12,48 @@
 <body>
 
 <div>
-    <p id="serverinfo"></p>
-    <input type="text" id="name">
-    <br>
-    <button id="start">Start</button>
-    <br>
-    <br>
-    <br>
-    <input type="text" id="message">
-    <br>
-    <button id="send">Send</button>
-    <br>
-    <div id="messages">
+    <div id="main-screen">
+        <p id="serverinfo">Server inactive</p>
+        <input type="text" id="name">
+        <br>
+        <button id="start">Start</button>
+        <br><br><br>
+        <p>Servers on Local network</p>
+        <div id="servers">
+        </div>
+
+        <style>
+                #servers {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    justify-items: center;
+                    align-items: start;
+                    overflow-y: scroll;
+                    max-height: 50vh;
+                }
+                #servers .item {
+                    height: 12vh;
+                    width: auto;
+                }
+            </style>
+    </div>
+
+    <div id="chat-screen">
+        <br>
+        <button id="quit">Quit</button>
+        <br>
+        <br>
+        <input type="text" id="message">
+        <br>
+        <button id="send">Send</button>
+        <br>
+        <div id="messages">
+            <br>
+        </div>
+
+
+        <button id="filepicker" hidden>Select Files</button>
+
 
     </div>
 </div>
@@ -39,7 +69,6 @@
             align-items: center;
             height: 100vh;
             width: 100vw;
-            padding-top: 100px;
         }
         button {
             width: 90px;
@@ -54,45 +83,55 @@
         #messages p{
             margin: 10px;
         }
+        #filepicker {
+            width: auto;
+        }
     </style>
 
 <script>
+        let mainScreen = document.getElementById('main-screen');
+        let chatScreen = document.getElementById('chat-screen');
+        chatScreen.style.display = 'none';
+
+        document.getElementById('filepicker').onclick = e => {
+            Android.openFilesPicker();
+        }
 
         let serverinfo = document.getElementById('serverinfo');
 
-        let isListening = false;
-        if(!isListening) listenForEvents();
-
-        let send = document.getElementById('send')
         let serverButton = document.getElementById('start');
         let isStarted = true;
+
+        function setServerInfo(serviceName, hostName, ipaddr) {
+            serverinfo.innerHTML = `Server details:<br>${serviceName}~~~${hostName}<br>${ipaddr}`;
+        }
 
         serverButton.onclick = e => {
             isStarted = !isStarted
             if(isStarted) {
                 serverButton.textContent = "Start"
+                serverinfo.textContent = "Server inactive";
                 Android.stopServer();
             } else {
                 serverButton.textContent = "Stop"
                 let hostName = document.getElementById('name').value;
+                serverinfo.textContent = "";
                 Android.startServer(hostName);
             }
         }
 
+        let send = document.getElementById('send');
         send.onclick = e => {
-            if(!isListening) {
-                listenForEvents();
-            }
-            else {
-                let message = document.getElementById('message').value;
-                if(message != "") {
-                    sendMessage(message);
-                }
+            let message = document.getElementById('message').value;
+            if(message != "") {
+                sendMessage(message);
             }
         }
 
+        var currServerAdress = "";
+
         async function sendMessage(message){
-            const rawResponse = await fetch('http://192.168.0.9:45635/message', {
+            const rawResponse = await fetch(`http://${currServerAdress}/message`, {
                 method: 'POST',
                 headers: {
                 'Accept': 'application/json',
@@ -106,18 +145,49 @@
         }
 
 
-
-        function addHost(serviceName, hostName, ipaddr) {
-            serverinfo.textContent = `${serviceName} ${hostName} ${ipaddr}`;
+        let servers = document.getElementById('servers');
+        function addHost(serviceName, hostName, address) {
+            let item = document.createElement('div');
+            item.classList.add('item');
+            item.id = serviceName;
+            item.dataset.address = address;
+            let p = document.createElement('p');
+            p.textContent = hostName;
+            item.appendChild(p);
+            let button = document.createElement('button');
+            button.textContent = 'join';
+            button.onclick = e => {
+                listenForEvents(address);
+                mainScreen.style.display = 'none';
+            }
+            item.appendChild(button);
+            servers.appendChild(item);
         }
         function removeHost(serviceName) {
-            serverinfo.textContent = "";
+            document.getElementById(serviceName).remove();
         }
 
-        let messages = document.getElementById('messages');
+        let evtSource;
 
-        function listenForEvents() {
-            const evtSource = new EventSource('http://192.168.0.9:45635/events');
+        function disconnect() {
+            evtSource.close();
+            console.log("sse closed");
+            isListening = false;
+            send.textContent = "retry";
+            chatScreen.style.display = 'none';
+            mainScreen.style.display = '';
+        }
+
+        document.getElementById('quit').onclick = e => {
+            disconnect();
+        }
+
+
+        function listenForEvents(address) {
+            let messages = document.getElementById('messages');
+            // address = "192.168.0.15:45635";
+            evtSource = new EventSource(`http://${address}/events`);
+
 
             evtSource.onmessage = e => {
                 let data = JSON.parse(e.data);
@@ -128,16 +198,16 @@
             }
 
             evtSource.onopen = () => {
+                currServerAdress = address;
                 isListening = true;
                 console.log("sse open");
                 send.textContent = "send";
+                chatScreen.style.display = '';
+                messages.innerHTML = '';
             }
 
             evtSource.onerror = () => {
-                evtSource.close();
-                console.log("sse closed");
-                isListening = false;
-                send.textContent = "retry";
+                disconnect();
             }
         }
     </script>
