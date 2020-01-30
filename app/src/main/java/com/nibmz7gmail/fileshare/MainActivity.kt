@@ -1,28 +1,36 @@
 package com.nibmz7gmail.fileshare
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Looper
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.annotation.MainThread
 import androidx.lifecycle.Observer
 import com.nibmz7gmail.fileshare.model.HostEvent
 import com.nibmz7gmail.fileshare.server.NsdHelper
+import com.nibmz7gmail.fileshare.storage.StorageRepository
 import timber.log.Timber
 
+@MainThread
 class MainActivity : AppCompatActivity() {
 
     val nsdHelper by lazy { NsdHelper.getInstance(this) }
     val sharedPref by lazy { this.getPreferences(Context.MODE_PRIVATE) }
+    val storageRepository by lazy {
+        StorageRepository(this.application)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         val webView: WebView = findViewById(R.id.webview)
         webView.settings.javaScriptEnabled = true
-//        val urlPage = "http://192.168.0.139:5500/index.html"
-        val urlPage = "file:///android_asset/index.html"
+        val urlPage = "http://192.168.0.139:5500/index.html"
+//        val urlPage = "file:///android_asset/index.html"
         webView.addJavascriptInterface(WebAppInterface(this), "Android")
 
         webView.webViewClient = object : WebViewClient() {
@@ -53,9 +61,23 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl(urlPage)
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, returnIntent: Intent?) {
+        super.onActivityResult(requestCode, resultCode, returnIntent)
+        if (requestCode == PICK_FILES && resultCode == Activity.RESULT_OK) {
+
+            AppExecutors.diskIO().execute {
+                storageRepository.saveFiles(returnIntent)
+            }
+        }
+    }
+
     override fun onPause() {
         super.onPause()
         nsdHelper.stopDiscovery()
+    }
+
+    companion object {
+        const val PICK_FILES = 2
     }
 
 }

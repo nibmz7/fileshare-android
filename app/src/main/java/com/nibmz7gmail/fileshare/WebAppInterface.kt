@@ -1,9 +1,11 @@
 package com.nibmz7gmail.fileshare
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.webkit.JavascriptInterface
 import androidx.core.content.ContextCompat
+import com.nibmz7gmail.fileshare.MainActivity.Companion.PICK_FILES
 import com.nibmz7gmail.fileshare.model.ServerEvent
 import com.nibmz7gmail.fileshare.server.Server
 import com.nibmz7gmail.fileshare.server.Server.Companion.MESSAGE
@@ -11,14 +13,14 @@ import com.nibmz7gmail.fileshare.server.Server.Companion.START_SERVER
 import com.nibmz7gmail.fileshare.server.Server.Companion.STOP_SERVER
 import com.nibmz7gmail.fileshare.server.WebService
 
-class WebAppInterface(private val context: Context) {
+class WebAppInterface(private val activity: MainActivity) {
 
     @JavascriptInterface
     fun startServer(hostName: String) {
         AppExecutors.mainThread().execute {
-            val webServiceIntent = Intent(context, WebService::class.java)
+            val webServiceIntent = Intent(activity, WebService::class.java)
             webServiceIntent.putExtra("hostname", hostName)
-            ContextCompat.startForegroundService(context, webServiceIntent)
+            ContextCompat.startForegroundService(activity, webServiceIntent)
         }
     }
 
@@ -33,6 +35,18 @@ class WebAppInterface(private val context: Context) {
     fun sendMessage(message: String) {
         AppExecutors.mainThread().execute {
             Server.EventEmitter.setStatus(ServerEvent.Emit(MESSAGE, message))
+        }
+    }
+
+    @JavascriptInterface
+        fun openFilesPicker() {
+        AppExecutors.mainThread().execute {
+            val requestFilePicker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                type = "*/*"
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                addCategory(Intent.CATEGORY_OPENABLE)
+            }
+            activity.startActivityForResult(requestFilePicker, PICK_FILES)
         }
     }
 }
