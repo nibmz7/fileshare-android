@@ -1,7 +1,7 @@
 package com.nibmz7gmail.fileshare.server
 
-import android.os.Looper
 import androidx.annotation.WorkerThread
+import com.nibmz7gmail.fileshare.storage.toJsonString
 import org.nanohttpd.protocols.http.content.ContentType
 import org.nanohttpd.protocols.http.response.ChunkedOutputStream
 import org.nanohttpd.protocols.http.response.Response
@@ -21,8 +21,8 @@ class SseSocket(source: Any) {
 
     private val support = PropertyChangeSupport(source)
 
-    fun createSseResponse(): Response {
-        val sseResponse = SseResponse()
+    fun createSseResponse(hostname: String): Response {
+        val sseResponse = SseResponse(hostname)
         support.addPropertyChangeListener(sseResponse)
         return sseResponse
     }
@@ -32,7 +32,7 @@ class SseSocket(source: Any) {
         support.firePropertyChange("update", null, message)
     }
 
-    private inner class SseResponse: Response(Status.OK, null, null, 0), PropertyChangeListener {
+    private inner class SseResponse(val hostname: String): Response(Status.OK, null, null, 0), PropertyChangeListener {
 
         val pauseLock = Any() as Object
         var message: String? = "Lol"
@@ -63,8 +63,10 @@ class SseSocket(source: Any) {
             pw.append("Date: ${gmtFrmt.format(Date())}\r\n")
             pw.append("Cache-Control: no-cache\r\n")
             pw.append("Connection: keep-alive\r\n")
-            pw.append("Keep-Alive: timeout=60, max=1000\r\n")
+            pw.append("Keep-Alive: timeout=5, max=1\r\n")
             pw.append("Transfer-Encoding: chunked0\r\n\r\n")
+            pw.flush()
+            pw.append("data: ${hostname.toJsonString("hostName")}\n\n")
             pw.flush()
 
             while (true) {
@@ -75,7 +77,7 @@ class SseSocket(source: Any) {
                         val chunkedOutputStream = ChunkedOutputStream(out)
                         chunkedOutputStream.write(data.toByteArray())
                         chunkedOutputStream.finish()
-                        Timber.i("Message sent")
+                        Timber.i("Update sent")
                     }
                 } catch (e: Exception) {
                     Timber.e("SENDING FAILED CLIENT CLOSED CONNECTION")

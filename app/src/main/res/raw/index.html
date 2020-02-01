@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <title>File server</title>
+        <link rel="shortcut icon" href="#" />
+    </head>
+
+    <body>
+
+        <div>
+            <div id="main-screen">
+                <p id="serverinfo"></p>
+                <input type="text" id="name">
+                <br>
+                <button id="start">Start</button>
+                <br><br><br>
+                <p>Servers on Local network</p>
+                <div id="servers">
+                </div>
+
+                <style>
+                #servers {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    justify-items: center;
+                    align-items: start;
+                    overflow-y: scroll;
+                    max-height: 50vh;
+                }
+                #servers .item {
+                    height: 12vh;
+                    width: auto;
+                }
+            </style>
+            </div>
+
+            <div id="chat-screen">
+                <br>
+                <button id="quit">Quit</button>
+                <br>
+                <br>
+                <input type="text" id="message">
+                <br>
+                <button id="send">Send</button>
+                <br>
+                <div id="messages">
+                    <br>
+                </div>
+
+
+                <button id="filepicker" hidden>Select Files</button>
+
+
+            </div>
+        </div>
+
+        <style>
+        body {
+            overflow: hidden;
+            margin: 0;
+        }
+        div {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+        }
+        button {
+            width: 90px;
+            height: 30px;
+        }
+        #messages {
+            margin-top: 0;
+            padding: 0;
+            overflow-y: scroll;
+            max-height: 200px;
+        }
+        #messages p{
+            margin: 10px;
+        }
+        #filepicker {
+            width: auto;
+        }
+    </style>
+
+        <script>
+        document.getElementById('filepicker').onclick = e => {
+            Android.openFilesPicker();
+        }
+
+        let mainScreen = document.getElementById('main-screen');
+        let chatScreen = document.getElementById('chat-screen');
+        let serverinfo = document.getElementById('serverinfo');
+        let serverButton = document.getElementById('start');
+        let send = document.getElementById('send');
+        let serversList = document.getElementById('servers');
+        let cacheServerInfo = {
+            serviceName : "",
+            hostName : "",
+            hostAddress : ""
+        }
+
+        chatScreen.style.display = 'none';
+        let isLoading = false;
+        let isRunning = false;
+        var currServerAdress = "";
+
+        const onResume = () => {
+            isLoading = true;
+        }
+
+        function addHost(serviceName, hostName, address) {
+            if(document.getElementById(serviceName)) {
+                //change host name
+                return;
+            }
+            let item = document.createElement('div');
+            item.classList.add('item');
+            item.id = serviceName;
+            item.dataset.address = address;
+            let p = document.createElement('p');
+            p.textContent = hostName;
+            item.appendChild(p);
+            let button = document.createElement('button');
+            button.textContent = 'join';
+            button.onclick = e => {
+                listenForEvents(address);
+                mainScreen.style.display = 'none';
+            }
+            item.appendChild(button);
+            servers.appendChild(item);
+        }
+
+        const onServiceFound = async (serviceName, hostAddress) => {
+            try {
+                const rawResponse = await fetch(`http://${hostAddress}/info`);
+                const host = await rawResponse.json();
+                addHost(serviceName, host.name, hostAddress);
+            } catch (error) {
+                document.getElementById(serviceName).remove();
+            }
+        }
+
+
+        const onServiceLost = (serviceName) => {
+            document.getElementById(serviceName).remove();
+        }
+
+        const onServiceStarted = async (serviceName, hostAddress) => {
+            const evtSource = new EventSource(`http://${hostAddress}/events`);
+
+            evtSource.onmessage = e => {
+                let json = JSON.parse(e.data);
+                if(typeof json.hostName !== 'undefined') {
+                    const hostName = json.hostName;
+                    cacheServerInfo.serviceName = serviceName;
+                    cacheServerInfo.hostName = hostName;
+                    cacheServerInfo.hostAddress = hostAddress;
+                    serverinfo.innerHTML = `Server details:<br>${serviceName}~~~${hostName}<br>${hostAddress}`;
+                    serverButton.textContent = "Stop";
+                    addHost(serviceName, hostName, hostAddress);
+                }
+            }
+
+            evtSource.onopen = () => {
+                isLoading = false;
+                isRunning = true;
+            }
+
+            evtSource.onerror = () => {
+                onServiceStopped();
+                evtSource.close();
+            }
+        }
+
+        const onServiceStopped = () => {
+            serverinfo.innerHTML = `Server is inactive`;
+            serverButton.textContent = "Start"
+            onServiceLost(cacheServerInfo.serviceName);
+            isLoading = false;
+            isRunning = false;
+        }
+
+        serverButton.onclick = (e) => {
+            if(isLoading) return;
+            isLoading = true;
+            if(!isRunning) {
+                let hostName = document.getElementById('name').value;
+                Android.startServer(hostName);
+            } else {
+                Android.stopServer();
+            }
+            isRunning = !isRunning;
+        }
+
+        send.onclick = e => {
+            let message = document.getElementById('message').value;
+            if(message != "") {
+                sendMessage(message);
+            }
+        }
+
+        async function sendMessage(message){
+            const rawResponse = await fetch(`http://${currServerAdress}/message`, {
+                method: 'POST',
+                headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+
+                },
+                body: JSON.stringify({message})
+            });
+            const content = await rawResponse.text();
+            console.log(content);
+        }
+
+        function disconnect() {
+            evtSource.close();
+            console.log("sse closed");
+            isListening = false;
+            send.textContent = "retry";
+            chatScreen.style.display = 'none';
+            mainScreen.style.display = '';
+        }
+
+        document.getElementById('quit').onclick = e => {
+            disconnect();
+        }
+
+        // function listenForEvents(address) {
+        //     let messages = document.getElementById('messages');
+        //     // address = "192.168.0.15:45635";
+        //     evtSource = new EventSource(`http://${address}/events`);
+
+
+        //     evtSource.onmessage = e => {
+        //         let data = JSON.parse(e.data);
+        //         let p = document.createElement('p');
+        //         p.textContent = data.message;
+        //         messages.appendChild(p);
+        //         messages.scrollTop = messages.scrollHeight;
+        //     }
+
+        //     evtSource.onopen = () => {
+        //         currServerAdress = address;
+        //         isListening = true;
+        //         console.log("sse open");
+        //         send.textContent = "send";
+        //         chatScreen.style.display = '';
+        //         messages.innerHTML = '';
+        //     }
+
+        //     evtSource.onerror = () => {
+        //         disconnect();
+        //     }
+        // }
+    </script>
+
+
+        <!-- <form action="upload" method="post" enctype="multipart/form-data">
+            Select image to upload:
+            <input type="file" name="fileToUpload" id="fileToUpload" multiple>
+            <input type="submit" value="Upload Image" name="submit">
+        </form> -->
+
+    </body>
+</html>

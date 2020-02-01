@@ -1,7 +1,6 @@
 package com.nibmz7gmail.fileshare.storage
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import timber.log.Timber
@@ -37,4 +36,13 @@ fun Context.saveFileFromUri(uri: Uri) {
 fun Context.getDir(dirName: String) {
     val filesDir = getDir(dirName, Context.MODE_PRIVATE)
 }
+
+fun String.toJsonString(): String {
+    return "{\"data\": \"$this\"}"
+}
+
+fun String.toJsonString(key: String): String {
+    return "{\"$key\": \"$this\"}"
+}
+
 

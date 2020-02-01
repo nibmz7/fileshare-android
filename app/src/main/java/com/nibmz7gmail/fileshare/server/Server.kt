@@ -11,30 +11,26 @@ import org.apache.commons.fileupload.FileItemStream
 import org.apache.commons.fileupload.UploadContext
 import org.apache.commons.fileupload.servlet.ServletFileUpload
 import org.apache.commons.fileupload.util.Streams
-import org.json.JSONObject
 import org.nanohttpd.protocols.http.IHTTPSession
 import org.nanohttpd.protocols.http.NanoHTTPD
-import org.nanohttpd.protocols.http.content.ContentType
 import org.nanohttpd.protocols.http.request.Method
-import org.nanohttpd.protocols.http.response.ChunkedOutputStream
 import org.nanohttpd.protocols.http.response.Response
 import org.nanohttpd.protocols.http.response.Response.newChunkedResponse
 import org.nanohttpd.protocols.http.response.Response.newFixedLengthResponse
 import org.nanohttpd.protocols.http.response.Status
 import timber.log.Timber
 import java.io.*
-import java.text.SimpleDateFormat
 import java.util.*
 
 class Server(private val context: Application) : NanoHTTPD(45635) {
 
     private var myHostName: String = "Anon"
-    private val sseSocket = SseSocket(this)
+    private val eventsLock = Any()
+    private val eventsSocket = SseSocket(this)
 
     companion object {
-        const val START_SERVER: Int = 1
-        const val STOP_SERVER: Int = 2
-        const val MESSAGE: Int = 3
+        const val STOP_SERVER = 2
+        const val SERVER_STARTED = 3
 
         private val LOCK = Any()
         private var instance: Server? = null
@@ -43,6 +39,7 @@ class Server(private val context: Application) : NanoHTTPD(45635) {
             synchronized(LOCK) {
                 if (instance == null) {
                     instance = Server(context.applicationContext as Application)
+                    Timber.e("SERVER CREATED")
                 }
                 return instance as Server
             }
@@ -61,7 +58,7 @@ class Server(private val context: Application) : NanoHTTPD(45635) {
         try {
             if (isAlive) {
                 Timber.e("Server is already listening on $listeningPort")
-                EventEmitter.setStatus(ServerEvent.Success(START_SERVER, myHostName))
+                EventEmitter.setStatus(ServerEvent.Success(SERVER_STARTED))
                 return
             }
             start(SOCKET_READ_TIMEOUT, false)
@@ -71,14 +68,16 @@ class Server(private val context: Application) : NanoHTTPD(45635) {
     }
 
     fun sendMessage(message: String) {
-        sseSocket.fireEvent(message)
+        synchronized(eventsLock) {
+            eventsSocket.fireEvent(message)
+        }
     }
 
     override fun start(timeout: Int, daemon: Boolean) {
         super.start(timeout, daemon)
         if (wasStarted()) {
             Timber.i("Listening on port $listeningPort")
-            EventEmitter.setStatus(ServerEvent.Success(START_SERVER, myHostName))
+            EventEmitter.setStatus(ServerEvent.Success(SERVER_STARTED))
         }
     }
 
@@ -110,7 +109,9 @@ class Server(private val context: Application) : NanoHTTPD(45635) {
                 "BAD BAD"
             )
             AppExecutors.networkIO().execute {
-                sseSocket.fireEvent(jsonData)
+                synchronized(eventsLock) {
+                    eventsSocket.fireEvent(jsonData)
+                }
             }
             val response = newFixedLengthResponse("Success")
             response.addHeader("Access-Control-Allow-Origin", "*")
@@ -118,7 +119,9 @@ class Server(private val context: Application) : NanoHTTPD(45635) {
         }
 
         if (uri == "events") {
-            return sseSocket.createSseResponse()
+            synchronized(eventsLock) {
+                return eventsSocket.createSseResponse(myHostName)
+            }
         }
 
         if (uri == "upload") {

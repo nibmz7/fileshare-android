@@ -5,19 +5,20 @@ import android.content.Context
 import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.os.Looper
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.annotation.MainThread
 import androidx.lifecycle.Observer
 import com.nibmz7gmail.fileshare.model.HostEvent
 import com.nibmz7gmail.fileshare.server.NsdHelper
+import com.nibmz7gmail.fileshare.server.NsdHelper.Companion.SERVICE_STARTED
 import com.nibmz7gmail.fileshare.storage.StorageRepository
 import timber.log.Timber
 
 @MainThread
 class MainActivity : AppCompatActivity() {
 
+    lateinit var webView: WebView
     val nsdHelper by lazy { NsdHelper.getInstance(this) }
     val sharedPref by lazy { this.getPreferences(Context.MODE_PRIVATE) }
     val storageRepository by lazy {
@@ -27,10 +28,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        val webView: WebView = findViewById(R.id.webview)
+        webView = findViewById(R.id.webview)
         webView.settings.javaScriptEnabled = true
-//        val urlPage = "http://192.168.0.139:5500/index.html"
-        val urlPage = "file:///android_asset/index.html"
+        val urlPage = "http://192.168.0.139:5500/index.html"
+//        val urlPage = "file:///android_res/raw/index.html"
         webView.addJavascriptInterface(WebAppInterface(this), "Android")
 
         webView.webViewClient = object : WebViewClient() {
@@ -41,21 +42,20 @@ class MainActivity : AppCompatActivity() {
                     nsdHelper.startDiscovery()
                 }
             }
+
+
         }
 
         NsdHelper.EventEmitter.observe(this, Observer {
             when(it) {
                 is HostEvent.Added -> {
-                    val hostName = it.host.name
-                    val serviceName = it.host.serviceName
-                    val ipAddr = it.host.address
-                    val port = it.host.port
-                    val data = "'$serviceName','$hostName', '$ipAddr:$port'"
-                    if(it.host.isOwner) webView.loadUrl("javascript:setServerInfo($data)")
-                    webView.loadUrl("javascript:addHost($data)")
+                    webView.loadUrl("javascript:onServiceFound(${it.host})")
                 }
-                is HostEvent.Removed -> {
-                    webView.loadUrl("javascript:removeHost('${it.serviceName}')")
+                is HostEvent.Emit -> {
+                    if(it.code == SERVICE_STARTED) {
+                        Timber.e("SERVICE_STARTED called")
+                        webView.loadUrl("javascript:onServiceStarted(${it.host})")
+                    }
                 }
             }
         })
@@ -71,6 +71,11 @@ class MainActivity : AppCompatActivity() {
                 storageRepository.saveFiles(intent)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView.loadUrl("javascript:onResume()")
     }
 
     override fun onPause() {

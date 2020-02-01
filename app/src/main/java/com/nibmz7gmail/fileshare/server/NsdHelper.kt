@@ -17,10 +17,12 @@ class NsdHelper(context: Application) {
     private var discoveryListener: DiscoveryListener? = null
     private var registrationListener: RegistrationListener? = null
     private var myServiceName: String = ""
+    private var myHost: Host? = null
 
     companion object {
         const val SERVICE_TYPE = "_http._tcp."
         const val SERVICE_NAME = "NiMzShare"
+        const val SERVICE_STARTED = 1
 
         private val LOCK = Any()
         private var instance: NsdHelper? = null
@@ -29,6 +31,7 @@ class NsdHelper(context: Application) {
             synchronized(LOCK) {
                 if (instance == null) {
                     instance = NsdHelper(context.applicationContext as Application)
+                    Timber.e("Created")
                 }
                 return instance as NsdHelper
             }
@@ -56,29 +59,24 @@ class NsdHelper(context: Application) {
                 Timber.e("Resolve Succeeded. $serviceInfo")
                 val port: Int = serviceInfo.port
                 val address: String = serviceInfo.host.hostAddress
-                val hostname: String =
-                    serviceInfo.attributes["hostname"]?.toString(Charsets.UTF_8) ?: "Anon"
+                val host = Host(serviceInfo.serviceName, address, port)
                 if (serviceInfo.serviceName == myServiceName) {
-                    Timber.d("Same IP.")
-                    val host = Host(serviceInfo.serviceName, hostname, address, port, true)
-                    EventEmitter.postStatus(HostEvent.Added(host))
-                    return
+                    myHost = host
+                    EventEmitter.postStatus(HostEvent.Emit(SERVICE_STARTED, host))
                 }
-                val host = Host(serviceInfo.serviceName, hostname, address, port)
-                EventEmitter.postStatus(HostEvent.Added(host))
-                Timber.d("Service Name:${serviceInfo.serviceName} port:$port address:$address name:$hostname")
+                else EventEmitter.postStatus(HostEvent.Added(host))
+                Timber.d("Service Name:${serviceInfo.serviceName} port:$port address:$address ")
             }
         }
     }
 
-    fun startRegister(localPort: Int, hostname: String) {
+    fun startRegister(localPort: Int) {
         stopRegister()
         initializeRegistrationListener()
         val serviceInfo = NsdServiceInfo().apply {
             serviceName = SERVICE_NAME
             serviceType = SERVICE_TYPE
             port = localPort
-            setAttribute("hostname", hostname)
         }
         try {
             nsdManager.registerService(serviceInfo, PROTOCOL_DNS_SD, registrationListener)
@@ -129,6 +127,7 @@ class NsdHelper(context: Application) {
 
             override fun onServiceUnregistered(arg0: NsdServiceInfo) {
                 Timber.d("Service unregistered: %s", arg0.serviceName)
+                myHost = null
             }
 
             override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
@@ -145,17 +144,20 @@ class NsdHelper(context: Application) {
 
             override fun onServiceFound(service: NsdServiceInfo) {
                 if (service.serviceType != SERVICE_TYPE) return
+
                 if (service.serviceName.contains(SERVICE_NAME)) {
-                    Timber.d("File sharing service found: ${service.serviceName}")
+                    if (service.serviceName == myServiceName) {
+                        myHost?.let {
+                            EventEmitter.postStatus(HostEvent.Emit(SERVICE_STARTED, it))
+                            return
+                        }
+                    }
                     nsdManager.resolveService(service, createResolveListener())
                 }
             }
 
             override fun onServiceLost(service: NsdServiceInfo) {
                 Timber.e("service lost$service")
-                if (service.serviceName.contains(SERVICE_NAME)) {
-                    EventEmitter.postStatus(HostEvent.Removed(service.serviceName))
-                }
             }
 
             override fun onDiscoveryStopped(serviceType: String) {

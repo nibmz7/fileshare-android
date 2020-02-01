@@ -8,8 +8,6 @@ import androidx.core.content.ContextCompat
 import com.nibmz7gmail.fileshare.MainActivity.Companion.PICK_FILES
 import com.nibmz7gmail.fileshare.model.ServerEvent
 import com.nibmz7gmail.fileshare.server.Server
-import com.nibmz7gmail.fileshare.server.Server.Companion.MESSAGE
-import com.nibmz7gmail.fileshare.server.Server.Companion.START_SERVER
 import com.nibmz7gmail.fileshare.server.Server.Companion.STOP_SERVER
 import com.nibmz7gmail.fileshare.server.WebService
 
@@ -28,13 +26,6 @@ class WebAppInterface(private val activity: MainActivity) {
     fun stopServer() {
         AppExecutors.mainThread().execute {
             Server.EventEmitter.setStatus(ServerEvent.Emit(STOP_SERVER))
-        }
-    }
-
-    @JavascriptInterface
-    fun sendMessage(message: String) {
-        AppExecutors.mainThread().execute {
-            Server.EventEmitter.setStatus(ServerEvent.Emit(MESSAGE, message))
         }
     }
 

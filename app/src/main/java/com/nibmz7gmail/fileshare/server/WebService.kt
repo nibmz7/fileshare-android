@@ -1,6 +1,5 @@
 package com.nibmz7gmail.fileshare.server
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -12,9 +11,10 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.Observer
 import com.nibmz7gmail.fileshare.MainActivity
 import com.nibmz7gmail.fileshare.R
+import com.nibmz7gmail.fileshare.model.HostEvent
 import com.nibmz7gmail.fileshare.model.ServerEvent
-import com.nibmz7gmail.fileshare.server.Server.Companion.MESSAGE
-import com.nibmz7gmail.fileshare.server.Server.Companion.START_SERVER
+import com.nibmz7gmail.fileshare.server.NsdHelper.Companion.SERVICE_STARTED
+import com.nibmz7gmail.fileshare.server.Server.Companion.SERVER_STARTED
 import com.nibmz7gmail.fileshare.server.Server.Companion.STOP_SERVER
 import timber.log.Timber
 
@@ -38,6 +38,7 @@ class WebService : LifecycleService() {
             .setTicker(getText(R.string.ticker_text))
             .setColor(getColor(R.color.colorPrimary))
             .setColorized(true)
+            .setOnlyAlertOnce(true)
     }
 
     override fun onCreate() {
@@ -65,21 +66,26 @@ class WebService : LifecycleService() {
             notificationBuilder.build()
         )
 
+        NsdHelper.EventEmitter.observe(this, Observer {
+            if(it is HostEvent.Emit && it.code == SERVICE_STARTED) {
+                val address = it.host?.address
+                notificationBuilder.apply {
+                    setContentTitle(getText(R.string.title_ready))
+                    setContentText(getString(R.string.message_ready, "xxxx"))
+                }
+                notificationManager.notify(
+                    1,
+                    notificationBuilder.build()
+                )
+            }
+        })
+
         Server.EventEmitter.observe(this, Observer {
             when (it) {
                 is ServerEvent.Success -> {
-                    if (it.code == START_SERVER) {
-                        notificationBuilder.apply {
-                            setContentTitle(getText(R.string.title_ready))
-                            setContentText(getString(R.string.message_ready, "xxxx"))
-                        }
-                        notificationManager.notify(
-                            1,
-                            notificationBuilder.build()
-                        )
-                        nsdHelper.startRegister(webServer.listeningPort, it.message)
+                    if (it.code == SERVER_STARTED) {
+                        nsdHelper.startRegister(webServer.listeningPort)
                     }
-
                 }
                 is ServerEvent.Error -> {
 
@@ -92,9 +98,6 @@ class WebService : LifecycleService() {
                     if (it.code == STOP_SERVER) {
                         stopForeground(true)
                         stopSelf()
-                    }
-                    else if(it.code == MESSAGE) {
-                        webServer.sendMessage(it.message)
                     }
                 }
             }
