@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.annotation.MainThread
 import androidx.lifecycle.LiveData
 import com.nibmz7gmail.fileshare.AppExecutors
+import com.nibmz7gmail.fileshare.R
 import com.nibmz7gmail.fileshare.model.ServerEvent
 import org.apache.commons.fileupload.FileItemIterator
 import org.apache.commons.fileupload.FileItemStream
@@ -160,7 +161,12 @@ class Server(private val context: Application) : NanoHTTPD(45635) {
                 "js" -> "application/javascript"
                 else -> "text"
             }
-            newChunkedResponse(Status.OK, mime, context.assets.open(uri))
+            val resId: Int = when(uri) {
+                "index.html" -> R.raw.index
+                "main.js" -> R.raw.main
+                else -> R.raw.index
+            }
+            newChunkedResponse(Status.OK, mime, context.resources.openRawResource(resId))
         } catch (e: Exception) {
             val message = "Failed to load asset $uri because $e"
             newFixedLengthResponse(message)
