@@ -14,14 +14,18 @@ import org.apache.commons.fileupload.servlet.ServletFileUpload
 import org.apache.commons.fileupload.util.Streams
 import org.nanohttpd.protocols.http.IHTTPSession
 import org.nanohttpd.protocols.http.NanoHTTPD
+import org.nanohttpd.protocols.http.content.ContentType
 import org.nanohttpd.protocols.http.request.Method
 import org.nanohttpd.protocols.http.response.Response
 import org.nanohttpd.protocols.http.response.Response.newChunkedResponse
 import org.nanohttpd.protocols.http.response.Response.newFixedLengthResponse
 import org.nanohttpd.protocols.http.response.Status
 import timber.log.Timber
-import java.io.*
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
 import java.util.*
+
 
 class Server(private val context: Application) : NanoHTTPD(45635) {
 
@@ -91,6 +95,11 @@ class Server(private val context: Application) : NanoHTTPD(45635) {
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri.removePrefix("/").ifEmpty { "index.html" }
 
+        if(uri.substringBeforeLast("/") == "download") {
+            val fileInputStream = context.resources.openRawResource(R.raw.cover)
+            return newChunkedResponse(Status.OK, "application/octet-stream", fileInputStream)
+        }
+
         if (uri == "message") {
 
             if (session.method == Method.OPTIONS) {
@@ -126,6 +135,21 @@ class Server(private val context: Application) : NanoHTTPD(45635) {
         }
 
         if (uri == "upload") {
+            if (session.method == Method.OPTIONS) {
+                val response = newFixedLengthResponse("")
+                response.addHeader("Connection", "keep-alive")
+                response.addHeader("Access-Control-Allow-Origin", "*")
+                response.addHeader("Access-Control-Allow-Methods", "PUT")
+                response.addHeader("Access-Control-Max-Age", "86400")
+                response.addHeader("Access-Control-Allow-Headers", "*")
+                response.addHeader("Content-Type", "")
+                return response
+            }
+            val contentType = ContentType(session.headers.get("content-type"))
+            if(!contentType.isMultipart) {
+                val message = "Invalid mime type. Multipart/form-data required"
+                return newFixedLengthResponse(message)
+            }
             val fileUpload = ServletFileUpload()
             val iter: FileItemIterator = fileUpload.getItemIterator(NanoHttpdContext(session))
             while (iter.hasNext()) {
@@ -136,9 +160,11 @@ class Server(private val context: Application) : NanoHTTPD(45635) {
                 if (item.isFormField) {
                     println("Form field $name with value ${Streams.asString(inputStream)} detected.")
                 } else {
-                    println("File field $name with file name ${item.name} detected.")
+                    println("File: ${item.name} detected.")
+                    val fileDir = File(context.filesDir, "server/files")
+                    fileDir.mkdirs()
                     inputStream.use { input ->
-                        val outputStream = context.openFileOutput(item.name, Context.MODE_PRIVATE)
+                        val outputStream = FileOutputStream(File(fileDir, item.name))
                         outputStream.use { output ->
                             val buffer = ByteArray(4 * 1024) // buffer size
                             while (true) {
@@ -151,7 +177,9 @@ class Server(private val context: Application) : NanoHTTPD(45635) {
                     }
                 }
             }
-            return newFixedLengthResponse("success")
+            val response = newFixedLengthResponse("files uploaded")
+            response.addHeader("Access-Control-Allow-Origin", "*")
+            return response
         }
 
         return try {

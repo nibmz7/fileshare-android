@@ -40,6 +40,8 @@ class MainActivity : AppCompatActivity() {
         webview.setLayerType(View.LAYER_TYPE_HARDWARE, null)
 //        val urlPage = "http://192.168.0.139:5500/index.html"
         val urlPage = "file:///android_res/raw/index.html"
+//        val urlPage = "file:///android_asset/index.html"
+
         webview.addJavascriptInterface(WebAppInterface(this), "Android")
 
         webview.webViewClient = object : WebViewClient() {
